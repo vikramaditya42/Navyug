@@ -1,0 +1,196 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Private user preferences and bookmarked policy brief IDs isolated per authenticated user.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the user.",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Display name shown in user profile.",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "language": {
+          "type": "string",
+          "description": "Preferred UI language.",
+          "enum": ["en", "hi"]
+        },
+        "theme": {
+          "type": "string",
+          "description": "Preferred color theme.",
+          "enum": ["light", "dark"]
+        },
+        "savedPolicyIds": {
+          "type": "array",
+          "description": "List of saved policy brief identifiers (bounded to max 12)."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server last update timestamp."
+        }
+      },
+      "required": ["uid", "displayName", "language", "theme", "savedPolicyIds", "createdAt", "updatedAt"]
+    },
+    "Pledge": {
+      "title": "Pledge",
+      "description": "A verified citizen Viksit Bharat 2047 digital pledge certificate owned by a user.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID.",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "citizenName": {
+          "type": "string",
+          "description": "Full name displayed on the 2047 pledge certificate.",
+          "minLength": 2,
+          "maxLength": 80
+        },
+        "location": {
+          "type": "string",
+          "description": "City and State of the citizen.",
+          "minLength": 2,
+          "maxLength": 80
+        },
+        "commitment": {
+          "type": "string",
+          "description": "Core 2047 citizen commitment text.",
+          "minLength": 10,
+          "maxLength": 240
+        },
+        "issuedDate": {
+          "type": "string",
+          "description": "Formatted issue date string shown on the certificate.",
+          "minLength": 4,
+          "maxLength": 40
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        }
+      },
+      "required": ["userId", "citizenName", "location", "commitment", "issuedDate", "createdAt"]
+    },
+    "PolicyIdea": {
+      "title": "PolicyIdea",
+      "description": "Community-submitted 2047 policy idea displayed on the crowdsourced leaderboard.",
+      "type": "object",
+      "properties": {
+        "authorId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the submitting citizen.",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "authorName": {
+          "type": "string",
+          "description": "Public display name of the contributor.",
+          "minLength": 2,
+          "maxLength": 80
+        },
+        "age": {
+          "type": "number",
+          "description": "Contributor age (13 to 100)."
+        },
+        "state": {
+          "type": "string",
+          "description": "Indian state or union territory.",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "pillarCode": {
+          "type": "string",
+          "description": "Target 12-pillar clock code and label.",
+          "minLength": 4,
+          "maxLength": 60
+        },
+        "pitch": {
+          "type": "string",
+          "description": "Concise 2047 solution pitch.",
+          "minLength": 15,
+          "maxLength": 280
+        },
+        "blueprint": {
+          "type": "string",
+          "description": "3-step implementation blueprint.",
+          "minLength": 15,
+          "maxLength": 600
+        },
+        "upvotesCount": {
+          "type": "number",
+          "description": "Aggregate number of verified citizen upvotes."
+        },
+        "visibility": {
+          "type": "string",
+          "description": "Visibility scope of the idea.",
+          "enum": ["public"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        }
+      },
+      "required": ["authorId", "authorName", "age", "state", "pillarCode", "pitch", "blueprint", "upvotesCount", "visibility", "createdAt"]
+    },
+    "IdeaVote": {
+      "title": "IdeaVote",
+      "description": "Per-user vote marker ensuring one upvote per user per policy idea.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the voter.",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ideaId": {
+          "type": "string",
+          "description": "Document ID of the parent PolicyIdea.",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        }
+      },
+      "required": ["userId", "ideaId", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private user settings and bookmarked policy brief IDs; accessible only to the owning user."
+    },
+    "/pledges/{pledgeId}": {
+      "schema": { "$ref": "#/entities/Pledge" },
+      "description": "Citizen digital 2047 pledges owned by individual authenticated users."
+    },
+    "/ideas/{ideaId}": {
+      "schema": { "$ref": "#/entities/PolicyIdea" },
+      "description": "Publicly visible crowdsourced 2047 policy ideas."
+    },
+    "/ideas/{ideaId}/votes/{voteUserId}": {
+      "schema": { "$ref": "#/entities/IdeaVote" },
+      "description": "Subcollection tracking atomic per-user upvotes on policy ideas."
+    }
+  }
+}

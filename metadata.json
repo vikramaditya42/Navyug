@@ -1,0 +1,6 @@
+{
+  "name": "NAVYUG — Viksit Bharat 2047",
+  "description": "A clean, minimalistic bilingual civic portal tracking India's 2026–2047 trajectory with macro indicators, an interactive 12-pillar wall clock, policy briefs, youth stories, and digital 2047 pledges.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

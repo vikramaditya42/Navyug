@@ -1,0 +1,182 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Pillar 4.1: Default-deny global safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Primitive Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Entity Validation Blueprints (Pillar 2) ---
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['uid', 'displayName', 'language', 'theme', 'savedPolicyIds', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'displayName', 'language', 'theme', 'savedPolicyIds', 'createdAt', 'updatedAt'])
+        && data.uid is string && isValidId(data.uid) && data.uid == request.auth.uid
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100
+        && data.language is string && data.language.size() <= 4 && (data.language == 'en' || data.language == 'hi')
+        && data.theme is string && data.theme.size() <= 8 && (data.theme == 'light' || data.theme == 'dark')
+        && data.savedPolicyIds is list && data.savedPolicyIds.size() <= 12
+        && (data.savedPolicyIds.size() == 0 || (data.savedPolicyIds[0] is string && data.savedPolicyIds[0].size() <= 64))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPledge(data) {
+      return data.keys().hasAll(['userId', 'citizenName', 'location', 'commitment', 'issuedDate', 'createdAt'])
+        && data.keys().hasOnly(['userId', 'citizenName', 'location', 'commitment', 'issuedDate', 'createdAt'])
+        && data.userId is string && isValidId(data.userId) && data.userId == request.auth.uid
+        && data.citizenName is string && data.citizenName.size() >= 2 && data.citizenName.size() <= 80
+        && data.location is string && data.location.size() >= 2 && data.location.size() <= 80
+        && data.commitment is string && data.commitment.size() >= 10 && data.commitment.size() <= 240
+        && data.issuedDate is string && data.issuedDate.size() >= 4 && data.issuedDate.size() <= 40
+        && data.createdAt is timestamp;
+    }
+
+    function isValidPolicyIdea(data) {
+      return data.keys().hasAll(['authorId', 'authorName', 'age', 'state', 'pillarCode', 'pitch', 'blueprint', 'upvotesCount', 'visibility', 'createdAt'])
+        && data.keys().hasOnly(['authorId', 'authorName', 'age', 'state', 'pillarCode', 'pitch', 'blueprint', 'upvotesCount', 'visibility', 'createdAt'])
+        && data.authorId is string && isValidId(data.authorId)
+        && data.authorName is string && data.authorName.size() >= 2 && data.authorName.size() <= 80
+        && data.age is number && data.age >= 13 && data.age <= 100
+        && data.state is string && data.state.size() >= 2 && data.state.size() <= 60
+        && data.pillarCode is string && data.pillarCode.size() >= 4 && data.pillarCode.size() <= 60
+        && data.pitch is string && data.pitch.size() >= 15 && data.pitch.size() <= 280
+        && data.blueprint is string && data.blueprint.size() >= 15 && data.blueprint.size() <= 600
+        && data.upvotesCount is number && data.upvotesCount >= 0 && data.upvotesCount <= 1000000
+        && data.visibility is string && data.visibility.size() <= 16 && data.visibility == 'public'
+        && data.createdAt is timestamp;
+    }
+
+    function isValidIdeaVote(data, ideaId, voteUserId) {
+      return data.keys().hasAll(['userId', 'ideaId', 'createdAt'])
+        && data.keys().hasOnly(['userId', 'ideaId', 'createdAt'])
+        && data.userId is string && isValidId(data.userId) && data.userId == request.auth.uid && data.userId == voteUserId
+        && data.ideaId is string && isValidId(data.ideaId) && data.ideaId == ideaId
+        && data.createdAt is timestamp;
+    }
+
+    // --- Collection: /users/{userId} (Strict PII & Preference Isolation) ---
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && isOwner(userId);
+      allow list: if false;
+      allow create: if isVerified()
+        && isValidId(userId)
+        && isOwner(userId)
+        && isValidUserProfile(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerified()
+        && isValidId(userId)
+        && isOwner(userId)
+        && isValidUserProfile(incoming())
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'language', 'theme', 'savedPolicyIds', 'updatedAt']);
+      allow delete: if isVerified() && isValidId(userId) && isOwner(userId);
+    }
+
+    // --- Collection: /pledges/{pledgeId} (Owner-Scoped Citizen Pledges) ---
+    match /pledges/{pledgeId} {
+      allow get: if isSignedIn() && isValidId(pledgeId) && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && existing().userId == request.auth.uid;
+      allow create: if isVerified()
+        && isValidId(pledgeId)
+        && isValidPledge(incoming())
+        && incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if isVerified() && isValidId(pledgeId) && existing().userId == request.auth.uid;
+    }
+
+    // --- Collection: /ideas/{ideaId} (Crowdsourced Policy Leaderboard) ---
+    match /ideas/{ideaId} {
+      allow get: if isSignedIn() && isValidId(ideaId) && existing().visibility == 'public';
+      allow list: if isSignedIn() && existing().visibility == 'public';
+      allow create: if isVerified()
+        && isValidId(ideaId)
+        && isValidPolicyIdea(incoming())
+        && incoming().authorId == request.auth.uid
+        && incoming().upvotesCount == 0
+        && incoming().createdAt == request.time;
+      allow update: if isVerified()
+        && isValidId(ideaId)
+        && isValidPolicyIdea(incoming())
+        && incoming().authorId == existing().authorId
+        && incoming().createdAt == existing().createdAt
+        && incoming().visibility == existing().visibility
+        && (
+          // Action 1: Author edits pitch/blueprint only
+          (
+            existing().authorId == request.auth.uid
+            && incoming().upvotesCount == existing().upvotesCount
+            && incoming().diff(existing()).affectedKeys().hasOnly(['pitch', 'blueprint'])
+          )
+          ||
+          // Action 2: Citizen atomic upvote (+1 synced with /votes/{uid} creation)
+          (
+            incoming().diff(existing()).affectedKeys().hasOnly(['upvotesCount'])
+            && incoming().upvotesCount == existing().upvotesCount + 1
+            && !exists(/databases/$(database)/documents/ideas/$(ideaId)/votes/$(request.auth.uid))
+            && existsAfter(/databases/$(database)/documents/ideas/$(ideaId)/votes/$(request.auth.uid))
+          )
+          ||
+          // Action 3: Citizen atomic un-vote (-1 synced with /votes/{uid} deletion)
+          (
+            incoming().diff(existing()).affectedKeys().hasOnly(['upvotesCount'])
+            && incoming().upvotesCount == existing().upvotesCount - 1
+            && exists(/databases/$(database)/documents/ideas/$(ideaId)/votes/$(request.auth.uid))
+            && !existsAfter(/databases/$(database)/documents/ideas/$(ideaId)/votes/$(request.auth.uid))
+          )
+        );
+      allow delete: if isVerified() && isValidId(ideaId) && existing().authorId == request.auth.uid;
+
+      // --- Subcollection: /ideas/{ideaId}/votes/{voteUserId} ---
+      match /votes/{voteUserId} {
+        allow get: if isSignedIn() && isValidId(ideaId) && isValidId(voteUserId) && isOwner(voteUserId);
+        allow list: if isSignedIn() && existing().userId == request.auth.uid;
+        allow create: if isVerified()
+          && isValidId(ideaId)
+          && isValidId(voteUserId)
+          && isOwner(voteUserId)
+          && isValidIdeaVote(incoming(), ideaId, voteUserId)
+          && incoming().createdAt == request.time
+          && exists(/databases/$(database)/documents/ideas/$(ideaId))
+          && getAfter(/databases/$(database)/documents/ideas/$(ideaId)).data.upvotesCount
+             == get(/databases/$(database)/documents/ideas/$(ideaId)).data.upvotesCount + 1;
+        allow update: if false;
+        allow delete: if isVerified()
+          && isValidId(ideaId)
+          && isValidId(voteUserId)
+          && isOwner(voteUserId)
+          && exists(/databases/$(database)/documents/ideas/$(ideaId))
+          && getAfter(/databases/$(database)/documents/ideas/$(ideaId)).data.upvotesCount
+             == get(/databases/$(database)/documents/ideas/$(ideaId)).data.upvotesCount - 1;
+      }
+    }
+  }
+}
