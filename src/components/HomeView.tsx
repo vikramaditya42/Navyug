@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react';
 import { ArrowRight, ChevronDown, ChevronUp, Compass, BarChart3, Clock } from 'lucide-react';
 import {
   MANIFESTO_POINTS,
+  POLICY_BRIEFS,
   TARGET_CENTENARY_UTC,
   UI_COPY,
   VISION_PILLARS,
 } from '../data/navyugData';
-import { calculateCountdown } from '../utils/navyugLogic';
+import { calculateCountdown, computeCivicProgress } from '../utils/navyugLogic';
 import { useNavyug } from '../context/NavyugContext';
+import { CivicProgressTracker } from './CivicProgressTracker';
 
 export type NavDestination = 'home' | 'data' | 'clock' | 'pledge' | 'explore';
 
@@ -17,7 +19,16 @@ interface HomeViewProps {
 }
 
 export function HomeView({ onNavigate, initialSubTab = 'vision' }: HomeViewProps) {
-  const { language } = useNavyug();
+  const {
+    user,
+    language,
+    metricsLoading,
+    savedPledges,
+    localPledgeDownloads,
+    savedPolicyIds,
+    votedIdeaIds,
+    ideas,
+  } = useNavyug();
   const [subTab, setSubTab] = useState<'vision' | 'manifesto'>(initialSubTab);
   const [expandedManifesto, setExpandedManifesto] = useState<string>('01');
   const [nowMs, setNowMs] = useState<number>(() => Date.now());
@@ -26,6 +37,23 @@ export function HomeView({ onNavigate, initialSubTab = 'vision' }: HomeViewProps
     const id = window.setInterval(() => setNowMs(Date.now()), 1000);
     return () => window.clearInterval(id);
   }, []);
+
+  const previewSkeleton =
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('skeleton') === '1';
+  const showEngagementSkeleton = metricsLoading || previewSkeleton;
+
+  const authoredIdeasCount = user
+    ? ideas.filter((item) => item.authorId === user.uid).length
+    : 0;
+  const engagementSummary = computeCivicProgress({
+    pledgesCount: Math.max(savedPledges.length, localPledgeDownloads),
+    savedPoliciesCount: savedPolicyIds.length,
+    totalPolicies: POLICY_BRIEFS.length,
+    votesCastCount: votedIdeaIds.length,
+    authoredIdeasCount,
+    isSignedIn: Boolean(user),
+  });
 
   const countdown = calculateCountdown(nowMs, TARGET_CENTENARY_UTC);
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -69,6 +97,30 @@ export function HomeView({ onNavigate, initialSubTab = 'vision' }: HomeViewProps
             >
               {UI_COPY.home.secondaryCta[language]}
             </button>
+          </div>
+
+          <div className="min-h-[20px] flex items-center">
+            {showEngagementSkeleton ? (
+              <div
+                role="status"
+                aria-busy="true"
+                aria-label={language === 'en' ? 'Syncing engagement summary' : 'सहभागिता सारांश लोड हो रहा है'}
+                data-testid="home-engagement-skeleton"
+                className="flex items-center gap-2"
+              >
+                <div className="h-3.5 w-36 rounded-md bg-[#E8ECF4] dark:bg-[#232F45] motion-safe:animate-pulse" />
+                <div className="h-3.5 w-24 rounded-md bg-[#EEF1F6] dark:bg-[#1E293B] motion-safe:animate-pulse" />
+              </div>
+            ) : (
+              <p
+                data-testid="home-engagement-summary"
+                className="text-xs text-[#6E788A] dark:text-[#94A3B8] tabular-nums"
+              >
+                {language === 'en'
+                  ? `Your 2047 Readiness: ${engagementSummary.overallPercent}% · ${engagementSummary.completedMilestones}/${engagementSummary.totalMilestones} milestones completed`
+                  : `आपकी 2047 तैयारी: ${engagementSummary.overallPercent}% · ${engagementSummary.completedMilestones}/${engagementSummary.totalMilestones} लक्ष्य पूर्ण`}
+              </p>
+            )}
           </div>
         </div>
 
@@ -196,6 +248,9 @@ export function HomeView({ onNavigate, initialSubTab = 'vision' }: HomeViewProps
           );
         })}
       </section>
+
+      {/* Visual 2047 Pledge & Engagement Progress Tracker (Recharts) */}
+      <CivicProgressTracker onNavigate={onNavigate} isLoading={showEngagementSkeleton} />
 
       {/* Segmented Switch: Vision & Executive Summary | 5-Point Manifesto */}
       <section id="navyug-charter-tabs" className="space-y-6 scroll-mt-20">

@@ -158,3 +158,106 @@ export function formatCertificateDate(date: Date): string {
     year: 'numeric',
   });
 }
+
+export interface CivicEngagementInput {
+  pledgesCount: number;
+  savedPoliciesCount: number;
+  totalPolicies: number;
+  votesCastCount: number;
+  authoredIdeasCount: number;
+  isSignedIn: boolean;
+}
+
+export interface CivicMilestoneItem {
+  id: 'pledge' | 'policies' | 'votes' | 'ideas';
+  labelEn: string;
+  labelHi: string;
+  current: number;
+  target: number;
+  percent: number;
+  color: string;
+}
+
+export interface CivicProgressSummary {
+  overallPercent: number;
+  completedMilestones: number;
+  totalMilestones: number;
+  milestones: CivicMilestoneItem[];
+}
+
+export function computeCivicProgress(input: CivicEngagementInput): CivicProgressSummary {
+  const pledgePct = Math.min(100, input.pledgesCount > 0 ? 100 : 0);
+  const policyTarget = Math.max(1, Math.min(3, input.totalPolicies));
+  const policyPct = Math.min(100, Math.round((input.savedPoliciesCount / policyTarget) * 100));
+  const voteTarget = 3;
+  const votePct = Math.min(100, Math.round((input.votesCastCount / voteTarget) * 100));
+  const ideaTarget = 1;
+  const ideaPct = Math.min(100, Math.round((input.authoredIdeasCount / ideaTarget) * 100));
+
+  const milestones: CivicMilestoneItem[] = [
+    {
+      id: 'pledge',
+      labelEn: '2047 Pledge',
+      labelHi: '2047 प्रतिज्ञा',
+      current: input.pledgesCount,
+      target: 1,
+      percent: pledgePct,
+      color: '#2D4A8A',
+    },
+    {
+      id: 'policies',
+      labelEn: 'Policy Briefs',
+      labelHi: 'नीति सारांश',
+      current: input.savedPoliciesCount,
+      target: policyTarget,
+      percent: policyPct,
+      color: '#2C7A6B',
+    },
+    {
+      id: 'votes',
+      labelEn: 'Civic Votes',
+      labelHi: 'नागरिक वोट',
+      current: input.votesCastCount,
+      target: voteTarget,
+      percent: votePct,
+      color: '#6366A8',
+    },
+    {
+      id: 'ideas',
+      labelEn: 'Blueprints',
+      labelHi: 'नीति सुझाव',
+      current: input.authoredIdeasCount,
+      target: ideaTarget,
+      percent: ideaPct,
+      color: '#4F6D7A',
+    },
+  ];
+
+  // Weighted score: Pledge 35%, Policies 25%, Votes 20%, Blueprints 20%
+  const weighted = Math.round(
+    pledgePct * 0.35 + policyPct * 0.25 + votePct * 0.2 + ideaPct * 0.2
+  );
+  const completedMilestones = milestones.filter((m) => m.percent >= 100).length;
+
+  return {
+    overallPercent: Math.min(100, Math.max(0, weighted)),
+    completedMilestones,
+    totalMilestones: milestones.length,
+    milestones,
+  };
+}
+
+export interface EngagementLoadingState {
+  authReady: boolean;
+  isSignedIn: boolean;
+  profileLoaded: boolean;
+  pledgesLoaded: boolean;
+  ideasLoaded: boolean;
+}
+
+export function isEngagementLoading(state: EngagementLoadingState): boolean {
+  if (!state.authReady) return true;
+  if (!state.isSignedIn) return false;
+  return !(state.profileLoaded && state.pledgesLoaded && state.ideasLoaded);
+}
+

@@ -158,6 +158,7 @@ export function DataView() {
                   <div className="h-36 flex items-end justify-around gap-3 pt-4 pb-1 border-b border-[#E5E9F0] dark:border-[#242E42]">
                     {[
                       {
+                        slot: 'baseline',
                         yr: '2026',
                         val: metric.formatted['2026'],
                         pct: p2026,
@@ -165,6 +166,7 @@ export function DataView() {
                         textClass: 'text-[#64748B] dark:text-[#94A3B8]',
                       },
                       {
+                        slot: 'selected',
                         yr: horizon,
                         val: metric.formatted[horizon],
                         pct: pHorizon,
@@ -172,6 +174,7 @@ export function DataView() {
                         textClass: 'text-[#4F5294] dark:text-[#A5A8E8]',
                       },
                       {
+                        slot: 'target',
                         yr: '2047',
                         val: metric.formatted['2047'],
                         pct: 100,
@@ -179,13 +182,13 @@ export function DataView() {
                         textClass: 'text-[#2C7A6B] dark:text-[#55B8A5]',
                       },
                     ].map((bar) => (
-                      <div key={bar.yr} className="flex flex-col items-center justify-end h-full flex-1">
+                      <div key={bar.slot} className="flex flex-col items-center justify-end h-full flex-1">
                         <span className={`font-mono text-[10px] font-medium tabular-nums mb-1.5 whitespace-nowrap ${bar.textClass}`}>
                           {bar.val}
                         </span>
                         <div className="w-full max-w-[34px] h-24 flex items-end justify-center">
                           <div
-                            className={`w-full rounded-t-md transition-all duration-300 ${bar.barClass}`}
+                            className={`w-full rounded-t-md transition-all duration-200 ${bar.barClass}`}
                             style={{ height: `${bar.pct}%` }}
                           />
                         </div>

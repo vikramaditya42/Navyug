@@ -151,6 +151,7 @@ export function PledgeView({
     language,
     signInWithGoogle,
     savedPledges,
+    recordPledgeDownload,
     savePledge,
     deletePledge,
     ideas,
@@ -249,6 +250,7 @@ export function PledgeView({
     }
     setPledgeStatus(null);
     renderCertificatePng(citizenName.trim(), location.trim(), commitment.trim(), issuedDate);
+    recordPledgeDownload();
   };
 
   const handleCopyPledge = async () => {

@@ -2,14 +2,112 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   calculateCountdown,
+  computeCivicProgress,
   filterAndSortIdeas,
   generateIdeasCsv,
   generatePolicyBriefText,
   getIndicatorProgress,
+  isEngagementLoading,
   validateIdeaInput,
   validatePledgeInput,
 } from './navyugLogic';
 import { POLICY_BRIEFS, SEED_POLICY_IDEAS } from '../data/navyugData';
+
+test('isEngagementLoading resolves accurately for auth and Firestore stream states', () => {
+  // Initial auth hydration shows loading skeleton
+  assert.equal(
+    isEngagementLoading({
+      authReady: false,
+      isSignedIn: false,
+      profileLoaded: false,
+      pledgesLoaded: false,
+      ideasLoaded: false,
+    }),
+    true
+  );
+
+  // Guest user once auth is ready resolves immediately (no Firestore wait)
+  assert.equal(
+    isEngagementLoading({
+      authReady: true,
+      isSignedIn: false,
+      profileLoaded: false,
+      pledgesLoaded: false,
+      ideasLoaded: false,
+    }),
+    false
+  );
+
+  // Signed-in user stays loading until all 3 Firestore engagement streams resolve
+  assert.equal(
+    isEngagementLoading({
+      authReady: true,
+      isSignedIn: true,
+      profileLoaded: true,
+      pledgesLoaded: false,
+      ideasLoaded: true,
+    }),
+    true
+  );
+
+  assert.equal(
+    isEngagementLoading({
+      authReady: true,
+      isSignedIn: true,
+      profileLoaded: true,
+      pledgesLoaded: true,
+      ideasLoaded: false,
+    }),
+    true
+  );
+
+  // Signed-in user finishes loading once profile, pledges, and ideas settle
+  assert.equal(
+    isEngagementLoading({
+      authReady: true,
+      isSignedIn: true,
+      profileLoaded: true,
+      pledgesLoaded: true,
+      ideasLoaded: true,
+    }),
+    false
+  );
+});
+
+test('computeCivicProgress calculates weighted civic completion accurately', () => {
+  const empty = computeCivicProgress({
+    pledgesCount: 0,
+    savedPoliciesCount: 0,
+    totalPolicies: 6,
+    votesCastCount: 0,
+    authoredIdeasCount: 0,
+    isSignedIn: false,
+  });
+  assert.equal(empty.overallPercent, 0);
+  assert.equal(empty.completedMilestones, 0);
+
+  const partial = computeCivicProgress({
+    pledgesCount: 1,
+    savedPoliciesCount: 3,
+    totalPolicies: 6,
+    votesCastCount: 0,
+    authoredIdeasCount: 0,
+    isSignedIn: true,
+  });
+  assert.equal(partial.overallPercent, 60);
+  assert.equal(partial.completedMilestones, 2);
+
+  const full = computeCivicProgress({
+    pledgesCount: 2,
+    savedPoliciesCount: 6,
+    totalPolicies: 6,
+    votesCastCount: 5,
+    authoredIdeasCount: 2,
+    isSignedIn: true,
+  });
+  assert.equal(full.overallPercent, 100);
+  assert.equal(full.completedMilestones, 4);
+});
 
 test('calculateCountdown computes exact days, hours, minutes, seconds', () => {
   const target = Date.UTC(2047, 7, 15, 0, 0, 0);

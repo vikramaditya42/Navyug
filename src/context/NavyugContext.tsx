@@ -22,6 +22,7 @@ import {
 } from '../data/navyugData';
 import {
   formatCertificateDate,
+  isEngagementLoading,
   validateIdeaInput,
   validatePledgeInput,
   type IdeaFormInput,
@@ -43,6 +44,7 @@ export interface SavedPledge {
 interface NavyugContextValue {
   user: User | null;
   authReady: boolean;
+  metricsLoading: boolean;
   authBusy: boolean;
   authError: string | null;
   signInWithGoogle: () => Promise<void>;
@@ -56,6 +58,8 @@ interface NavyugContextValue {
   savedPolicyIds: string[];
   toggleSavedPolicy: (policyId: string) => Promise<void>;
   savedPledges: SavedPledge[];
+  localPledgeDownloads: number;
+  recordPledgeDownload: () => void;
   savePledge: (input: PledgeFormInput) => Promise<{ ok: boolean; error?: string }>;
   deletePledge: (pledgeId: string) => Promise<void>;
   ideas: PolicyIdeaItem[];
@@ -84,9 +88,14 @@ export function NavyugProvider({ children }: { children: React.ReactNode }) {
   const [savedPolicyIds, setSavedPolicyIds] = useState<string[]>([]);
 
   const [savedPledges, setSavedPledges] = useState<SavedPledge[]>([]);
+  const [localPledgeDownloads, setLocalPledgeDownloads] = useState<number>(0);
   const [cloudIdeas, setCloudIdeas] = useState<PolicyIdeaItem[]>([]);
   const [seedVoteDelta, setSeedVoteDelta] = useState<Record<string, number>>({});
   const [votedIdeaIds, setVotedIdeaIds] = useState<string[]>([]);
+
+  const [profileLoaded, setProfileLoaded] = useState(false);
+  const [pledgesLoaded, setPledgesLoaded] = useState(false);
+  const [ideasLoaded, setIdeasLoaded] = useState(false);
 
   // Apply light/dark class on <html> (Light theme default)
   useEffect(() => {
@@ -101,6 +110,9 @@ export function NavyugProvider({ children }: { children: React.ReactNode }) {
   // Listen to Firebase Auth state
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (firebaseUser) => {
+      setProfileLoaded(false);
+      setPledgesLoaded(false);
+      setIdeasLoaded(false);
       setUser(firebaseUser);
       setAuthReady(true);
     });
@@ -149,6 +161,10 @@ export function NavyugProvider({ children }: { children: React.ReactNode }) {
         }
       } catch (error) {
         console.warn('Could not sync user profile:', error);
+      } finally {
+        if (active) {
+          setProfileLoaded(true);
+        }
       }
     })();
 
@@ -180,8 +196,10 @@ export function NavyugProvider({ children }: { children: React.ReactNode }) {
           })
           .sort((a, b) => b.createdAtMs - a.createdAtMs);
         setSavedPledges(list);
+        setPledgesLoaded(true);
       },
       (error) => {
+        setPledgesLoaded(true);
         handleFirestoreError(error, OperationType.LIST, path);
       }
     );
@@ -191,6 +209,7 @@ export function NavyugProvider({ children }: { children: React.ReactNode }) {
   // Subscribe to public community policy ideas when authenticated
   useEffect(() => {
     if (!authReady || !user) return;
+    let active = true;
     const path = 'ideas';
     const q = query(collection(db, path), where('visibility', '==', 'public'));
     const unsub = onSnapshot(
@@ -212,6 +231,7 @@ export function NavyugProvider({ children }: { children: React.ReactNode }) {
             createdAtMs: tsToMs(data.createdAt),
           };
         });
+        if (!active) return;
         setCloudIdeas(list);
 
         // Check which cloud ideas this user already voted on
@@ -222,6 +242,7 @@ export function NavyugProvider({ children }: { children: React.ReactNode }) {
               return voteSnap.exists() ? idea.id : null;
             })
           );
+          if (!active) return;
           const cloudVoted = voteChecks.filter((id): id is string => Boolean(id));
           setVotedIdeaIds((prev) => {
             const seedOnly = prev.filter((id) => id.startsWith('seed-'));
@@ -229,13 +250,23 @@ export function NavyugProvider({ children }: { children: React.ReactNode }) {
           });
         } catch (err) {
           console.warn('Could not verify user votes:', err);
+        } finally {
+          if (active) {
+            setIdeasLoaded(true);
+          }
         }
       },
       (error) => {
+        if (active) {
+          setIdeasLoaded(true);
+        }
         handleFirestoreError(error, OperationType.LIST, path);
       }
     );
-    return () => unsub();
+    return () => {
+      active = false;
+      unsub();
+    };
   }, [authReady, user]);
 
   const syncUserPrefs = useCallback(
@@ -326,6 +357,10 @@ export function NavyugProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setAuthBusy(false);
     }
+  }, []);
+
+  const recordPledgeDownload = useCallback(() => {
+    setLocalPledgeDownloads((prev) => prev + 1);
   }, []);
 
   const savePledge = useCallback(
@@ -456,10 +491,23 @@ export function NavyugProvider({ children }: { children: React.ReactNode }) {
     return [...cloudIdeas, ...adjustedSeeds];
   }, [cloudIdeas, seedVoteDelta]);
 
+  const metricsLoading = useMemo(
+    () =>
+      isEngagementLoading({
+        authReady,
+        isSignedIn: Boolean(user),
+        profileLoaded,
+        pledgesLoaded,
+        ideasLoaded,
+      }),
+    [authReady, user, profileLoaded, pledgesLoaded, ideasLoaded]
+  );
+
   const value = useMemo<NavyugContextValue>(
     () => ({
       user,
       authReady,
+      metricsLoading,
       authBusy,
       authError,
       signInWithGoogle,
@@ -473,6 +521,8 @@ export function NavyugProvider({ children }: { children: React.ReactNode }) {
       savedPolicyIds,
       toggleSavedPolicy,
       savedPledges,
+      localPledgeDownloads,
+      recordPledgeDownload,
       savePledge,
       deletePledge,
       ideas,
@@ -483,6 +533,7 @@ export function NavyugProvider({ children }: { children: React.ReactNode }) {
     [
       user,
       authReady,
+      metricsLoading,
       authBusy,
       authError,
       signInWithGoogle,
@@ -496,6 +547,8 @@ export function NavyugProvider({ children }: { children: React.ReactNode }) {
       savedPolicyIds,
       toggleSavedPolicy,
       savedPledges,
+      localPledgeDownloads,
+      recordPledgeDownload,
       savePledge,
       deletePledge,
       ideas,

@@ -202,6 +202,20 @@ export function ClockView({ onSubmitIdeaForPillar }: ClockViewProps) {
                 const x = cx + Math.cos(rad) * hourRadius;
                 const y = cy + Math.sin(rad) * hourRadius;
                 const active = p.hour === selectedHour;
+                const dialLabels: Record<number, string> = {
+                  1: 'Econ',
+                  2: 'Edu',
+                  3: 'Health',
+                  4: 'Agri',
+                  5: 'Infra',
+                  6: 'Green',
+                  7: 'AI',
+                  8: 'Nari',
+                  9: 'Justice',
+                  10: 'Cities',
+                  11: 'Def',
+                  12: 'Culture',
+                };
 
                 return (
                   <g
@@ -221,7 +235,7 @@ export function ClockView({ onSubmitIdeaForPillar }: ClockViewProps) {
                     <circle
                       cx={x}
                       cy={y}
-                      r={active ? 22 : 17}
+                      r={active ? 23 : 19}
                       className={
                         active
                           ? 'fill-[#2D4A8A] dark:fill-[#7CA0F0]'
@@ -251,7 +265,7 @@ export function ClockView({ onSubmitIdeaForPillar }: ClockViewProps) {
                           : 'fill-[#6E788A] dark:fill-[#94A3B8]'
                       }`}
                     >
-                      {p.shortTitle.en.slice(0, 7)}
+                      {dialLabels[p.hour]}
                     </text>
                   </g>
                 );
@@ -261,21 +275,21 @@ export function ClockView({ onSubmitIdeaForPillar }: ClockViewProps) {
               <circle
                 cx={cx}
                 cy={cy}
-                r="34"
+                r="38"
                 className="fill-white dark:fill-[#161D2B] stroke-[#2D4A8A] dark:stroke-[#7CA0F0]"
-                strokeWidth="2.5"
+                strokeWidth="2.25"
               />
               <text
                 x={cx}
-                y={cy - 6}
+                y={cy - 9}
                 textAnchor="middle"
-                className="font-mono text-[8px] font-medium fill-[#6E788A] dark:fill-[#94A3B8]"
+                className="font-mono text-[7.5px] font-medium fill-[#6E788A] dark:fill-[#94A3B8]"
               >
                 2047 CLOCK
               </text>
               <text
                 x={cx}
-                y={cy + 8}
+                y={cy + 6}
                 textAnchor="middle"
                 className="font-mono text-[13px] font-bold fill-[#141926] dark:fill-[#F1F5F9]"
               >
